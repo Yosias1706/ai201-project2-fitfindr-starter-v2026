@@ -29,6 +29,14 @@ tool calls and returns a fit card — in at least 4 of 5 tries.
      "my search is a plain keyword match and some phrasings will miss" is a
      real answer. -->
 
+`search_listings` is a plain keyword-overlap score with stopwords removed — no
+stemming or synonyms — so a phrasing like "tees" vs "tee" or "t-shirt" vs
+"graphic tee" can score zero even when a matching listing exists, and the regex
+parser can mis-pull a size or price out of the query. Two of the three tools
+also call the model, so one of five tries can fail on a model hiccup. 5 of 5
+would pretend the keyword match and regex parsing never miss; anything below
+4 of 5 would mean the happy path is genuinely broken.
+
 ---
 
 ## 2. An impossible query stops before the second tool
@@ -40,63 +48,67 @@ Given a query that matches no listings, the agent stops before calling
 <!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
      about this path? -->
 
----
-
-## 3. Something about state
-
-<!-- YOU WRITE THIS ONE.
-
-     How would you know that the item your search found is the same item the
-     next tool received? Name something countable or observable.
-
-     This is the criterion people find hardest, because state failure doesn't
-     look like state failure — it looks like a tool problem. Something that
-     compares session["selected_item"] against what actually reached
-     suggest_outfit is the shape you're after. -->
-
-
-
-**Why this target:**
-
-
+This path never touches the model. `search_listings` is deterministic — the
+same parsed query against the same `listings` data returns the same empty list
+every time — and the branch in `agent.py::run_agent` is a single `if not
+results` check. There's no randomness anywhere on this path, so a single
+failure means the branch or the price/size filter is wrong, not unlucky.
 
 ---
 
-## 4. Something about the fit card
+## 3. The item search found is the item every later tool received
 
-<!-- YOU WRITE THIS ONE.
-
-     The fit card calls a model, so the same input can produce different words
-     each time. That's not a bug — it's the nature of the tool. So what would
-     make it acceptable?
-
-     Think about what you'd actually be unhappy to see. A caption that never
-     mentions the price? Two different items producing the same opening
-     sentence? A card longer than a caption anyone would post? Any of those can
-     be turned into a number. -->
-
-
+Given a matching query, the `id` of `session["selected_item"]` equals the `id`
+of `session["search_results"][0]`, equals the `id` of the `new_item` that
+`suggest_outfit` and `create_fit_card` actually received (as logged by
+`trace.step`), and the `outfit` string `create_fit_card` received is exactly
+`session["outfit_suggestion"]` — all four checks hold in 5 of 5 tries.
 
 **Why this target:**
-
-
+Nothing on this path is random: the hand-off is just reads and writes on the
+session dict, so if the loop is wired right it is right every time and 5 of 5
+is the only honest target. It isn't free, though — it's easy to pass a
+different variable than the one stored (a stale `results[0]` from an earlier
+line, or the outfit text before it was saved), and that bug would look like a
+bad outfit or a wrong caption rather than a state problem. Comparing `id`s at
+each hand-off is what makes it countable instead of a judgment call.
 
 ---
 
-## 5. Your choice
+## 4. The fit card is a postable caption with the real details
 
-<!-- YOU WRITE THIS ONE TOO.
-
-     Pick something you actually care about getting right. Speed, the empty
-     wardrobe path, what happens when the model can't be reached, whether the
-     search respects a price ceiling — anything, as long as it names a number
-     or an observable outcome. -->
-
-
+Given a matching query, the fit card is 2–4 sentences (counted by splitting on
+`.`, `!`, `?`), under 400 characters, contains the selected item's price as
+`$` + its whole-dollar amount (e.g. `$24` for 24.0), and names its `platform`
+(case-insensitive) — all four true in at least 4 of 5 tries.
 
 **Why this target:**
+`create_fit_card`'s docstring asks for exactly this: two to four sentences,
+price and platform mentioned, reading like a post rather than a product
+description. At TEMPERATURE 0.9 the model will sometimes run long, drop the
+price, or write "24 bucks" instead of `$24`, and emoji or "..." can throw off
+the sentence count, so 5 of 5 isn't realistic for model output. But the prompt
+hands it the price and platform directly, so missing them more than once in
+five means the prompt isn't doing its job.
 
+---
 
+## 5. A matching query finishes in under 10 seconds
+
+Given a matching query, `run_agent` returns a completed session (fit card set,
+no error) in under 10 seconds of wall-clock time, measured with
+`time.perf_counter()` around the call — in at least 4 of 5 tries.
+
+**Why this target:**
+`search_listings` is local and runs in well under a second, so the time is
+almost all the two `generate()` calls (`suggest_outfit` and
+`create_fit_card`); on `gemini-3.5-flash-lite` each is normally a few seconds,
+so a typical run should land around 3–6 seconds and 10 leaves room for normal
+latency. It isn't 5 of 5 because `config.py` caps us at 15 requests per
+minute: five back-to-back tries is 10 model calls, and one rate-limit pause or
+a retry in `generate.py` can add tens of seconds to a single try. More than one
+slow try, though, would mean the prompts are too long or the loop is making
+calls it doesn't need.
 
 ---
 
