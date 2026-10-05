@@ -40,6 +40,7 @@
 ## What This Does
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
+User enters type of clothing item they want. Based on similar items found based on keywords and the users wardrobe a reccomendation card is generated and sent back to the user.
 
 
 
@@ -170,14 +171,20 @@ Nothing beats a broken-in pair of vintage Levi's 501s for that effortless street
 **Moment 1**
 
 - *What I asked for:*
+I asked Claude to create my tools
 - *What came back:*
+The corresponding functions
 - *What I changed:*
+Made describe_item leave out the brand line when its none
 
 **Moment 2**
 
 - *What I asked for:*
+I asked it to help make strong criteria
 - *What came back:*
+Three strong testing criteria relating to state, fit card, and speed
 - *What I changed:*
+Changed fit card character limit from 500 to 400
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
