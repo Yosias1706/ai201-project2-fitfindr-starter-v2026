@@ -106,15 +106,15 @@ Return a descriptive message
      function have to be real. -->
 
 **Branch rule:**
-If search_listings returns an empty list, put a message in the session and stop. Otherwise, take the first result and go to suggest_outfit
+If `search_listings` returns an empty list, put a message in `session["error"]` naming what the user could change (price limit, size, broader words) and stop — `suggest_outfit` and `create_fit_card` are never called. Otherwise, take the first result as `session["selected_item"]` and go to `suggest_outfit`, then `create_fit_card`.
 
 **Where it lives:** `agent.py::run_agent`
 
 **How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
-regex
+Regex, in `agent.py::parse_query` — pulls out a max price ("under $30"), a size ("size M"), and leaves the rest as the description.
 
 **What moves through the session:** <!-- which fields, in what order -->
-Initially keywords of what the user wants and possibly a size are passed in, the result is a list of matching listing dicts containing info like size and style on each clothing item. Some of the matching items from this  listing dict are passed with a wardrobe dict connected to the users wardrobe, to produce an outfit suggestion in a string. That outfit suggestion is used with listing information of the item to produce a caption string reccomending the item.  
+`query` → `parsed` (description, size, max_price) → `search_results` (list of listing dicts) → `selected_item` (the first result) → `outfit_suggestion` (string from `suggest_outfit`, given `selected_item` and `wardrobe`) → `fit_card` (string from `create_fit_card`, given `outfit_suggestion` and `selected_item`). If search comes back empty, `error` is set and the last three stay `None`.
 
 ---
 
