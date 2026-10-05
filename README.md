@@ -60,24 +60,35 @@
 ### `search_listings`
 
 - **What it does:**
+Searches the listings data for a listing matching a description and optionally a clothing size and maximum price
 - **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
+description(str), size(str), max_price(float)
 - **Returns:**
+a list of matching listing dicts, best match first
 - **When it has nothing:**
+Returns an empty list
 
 ### `suggest_outfit`
 
 - **What it does:**
+Suggests a few outfits for the user based on what they're looking at and their wardrobe
 - **Inputs:**
+new_item(dict) a listing dict of item users considering, wardrobe(dict) dictionary with "items" key holding a list of items. 
 - **Returns:**
+Non empty string with outfit suggestions
 - **When it has nothing:**
+Returns general styling advice
 
 ### `create_fit_card`
 
 - **What it does:**
+Write a short caption about the clothing item found
 - **Inputs:**
+outfit(str), outfit suggestion, new_item(dict) the listing dictionary for the item
 - **Returns:**
+a string, a two to four sentence caption describing the outfit
 - **When it has nothing:**
-
+Return a descriptive message
 ---
 
 ## Planning Loop
@@ -94,12 +105,15 @@
      function have to be real. -->
 
 **Branch rule:**
+If search_listings returns an empty list, put a message in the session and stop. Otherwise, take the first result and go to suggest_outfit
 
 **Where it lives:** `agent.py::run_agent`
 
 **How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+regex
 
 **What moves through the session:** <!-- which fields, in what order -->
+Initially keywords of what the user wants and possibly a size are passed in, the result is a list of matching listing dicts containing info like size and style on each clothing item. Some of the matching items from this  listing dict are passed with a wardrobe dict connected to the users wardrobe, to produce an outfit suggestion in a string. That outfit suggestion is used with listing information of the item to produce a caption string reccomending the item.  
 
 ---
 
