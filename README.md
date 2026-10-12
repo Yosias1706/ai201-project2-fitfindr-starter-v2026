@@ -268,13 +268,31 @@ that produced it:
 **Happy path**
 
 ```
-
+[1] parse_query
+      in:  vintage graphic tee under $30, size M
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Vintage Knit Vest — Argyle Brown/Cream, 90s Silk Slip Dress — Floral, Midi Length … +7 more
+      →    branch: results found, selecting the first
+[3] suggest_outfit
+      in:  dict with keys: item, wardrobe_items
+      out: **Outfit 1: Casual Y2K Streetwear** Pair the butterfly baby tee with your **baggy dark wash jeans** to balance…
+[4] create_fit_card
+      in:  dict with keys: outfit, item
+      out: Obsessed with this Y2K butterfly baby tee I just scored on Depop for $18! It’s giving major 2000s streetwear v…
 ```
 
 **Empty search**
 
 ```
-
+[1] parse_query
+      in:  designer ballgown size XXS under $5
+      out: dict with keys: description, size, max_price
+[2] search_listings (via MCP)
+      in:  dict with keys: description, size, max_price
+      out: [] (empty)
+      →    branch: empty, stopping before suggest_outfit
 ```
 
 **On the MCP move:** <!-- what changed in your code, and whether anything
@@ -361,3 +379,14 @@ full. -->
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+
+
+---
+
+## Failure Modes
+
+| Failure | How I triggered it | What the agent said | Handler |
+|---|---|---|---|
+| Empty search | `ask 'designer ballgown size XXS under $5'` | "Nothing matched 'designer ballgown' in size XXS under $5. Try to raise the price limit, drop the size or try a neighbouring one, or use broader words, like 'dress' instead of 'ballgown'." | Branch in `run_agent` sets `session["error"]` and stops before any model call. |
+| Empty wardrobe | `ask 'oversized corduroy jacket under $60' --empty-wardrobe` | Returned general styling advice and a fit card; no crash. | `suggest_outfit` switches to a general-advice prompt when `wardrobe["items"]` is empty. |
+| Model unavailable | Changed the last character of `GEMINI_API_KEY`, asked 'cream knit cardigan size L under $45' | "The model couldn't be reached, so FitFindr stopped before finishing. The model rejected your API key. Check GEMINI_API_KEY in your .env file... Fix that and ask again." | `run_agent` catches `ModelUnavailable` (and `MCPError` for the search tool) and sets `session["error"]`. Key restored afterwards. |
