@@ -348,26 +348,35 @@ full. -->
 
      `python run_eval.py --label after` -->
 
-**What I changed:**
+**What I changed:** One change in `generate.py::_get_client`: the model client's request timeout, from 45 seconds (which I had added during the before run, because a stalled call otherwise waited forever) down to 10 seconds. A stalled Gemini call is now abandoned after 10s and retried, instead of holding the run for 45s. Timeout errors are retried like rate limits.
 
-**Which failure it was meant to fix:**
+**Which failure it was meant to fix:** Criterion 5. In the before run, the one miss (try 4, 48.3s) was a stalled call waiting out the long timeout before the retry succeeded. Typical tries take 2-3s, so a shorter timeout should cut those stalls to about 10s plus a retry.
+
+**A first attempt that broke everything:** I first set the timeout to 7s. The API rejects anything under 10s (`400 INVALID_ARGUMENT: Manually set deadline 7s is too short. Minimum allowed deadline is 10s`), so every model call failed in about 0.3s and criteria 1, 3, 4 and 5 all went 0/5. That run is kept as `results/run_2026-10-12_0119_after_7s_invalid.md` and is not the after log below. 10s is the lowest value the API allows.
 
 ### Run Log — After
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. Matching query completes all three tools and returns a fit card | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. Impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. Item search found is the item every later tool received | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. Fit card is 2-4 sentences, under 400 chars, with the price and platform | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. Matching query finishes in under 10 seconds | 4 of 5 | PASS (2.2s) | FAIL (35.9s) | PASS (2.3s) | PASS (2.0s) | PASS (2.0s) | MET (4/5) |
 
-**Did it help, and how do I know:**
+Scored the same way as the before run, from `results/records_after.json`. Real output, `run_eval.py::run_once` timing around `agent.py::run_agent`, query `denim jacket under $50`:
 
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
+```
+try 1: 2.2s
+try 2: 35.9s   <- FAIL
+try 3: 2.3s
+try 4: 2.0s
+try 5: 2.0s
+```
 
+**Did it help?** No, not on the criterion it targeted. Criterion 5 is 4/5 before and 4/5 after, and the slow try is still there (48.3s before, 35.9s after). The other criteria were already passing and still pass. The shorter timeout did not stop the stalls: the slow tries in the after run (13.0s, 13.2s, 34.4s, 35.9s, 36.1s) are one or more 10s timeouts plus retry waits and re-calls, which still add up past 10 seconds. A 13s try, one stall and one retry, passes criterion 1 but would miss a 10s limit.
 
+**Why it did not reach 5/5:** The timeout only bounds each attempt, not the whole run. With a 10s floor on the deadline and two model calls per run, one stalled call already costs about 10s before the retry, so a single stall breaks the 10s limit no matter what the client does. Getting to 5/5 would need a different change, such as a faster model or fallback, or a looser criterion, and loosening it after missing would not count as a fix. So criterion 5 stays at its 4-of-5 floor and is still limited by Gemini's intermittent stalls, not by my code.
 
 ---
 
