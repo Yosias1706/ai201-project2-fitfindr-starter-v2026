@@ -253,7 +253,7 @@ def _get_client():
                 "Copy .env.example to .env and paste your key in, then try "
                 "again. `python test.py` will confirm it's working."
             )
-        _client = genai.Client(api_key=key)
+        _client = genai.Client(api_key=key, http_options={"timeout": 45000})
     return _client
 
 
@@ -327,6 +327,10 @@ def generate(
                 "429" in message
                 or "resource" in message and "exhaust" in message
                 or "rate" in message and "limit" in message
+                or "503" in message
+                or "overloaded" in message
+                or "high demand" in message
+                or "timed out" in message
             )
             if not rate_limited:
                 raise ModelUnavailable(_explain(exc)) from exc

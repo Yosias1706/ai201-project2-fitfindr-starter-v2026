@@ -30,7 +30,9 @@ mode — caching is what usually explains it.
 
 import argparse
 import datetime as dt
+import json
 import sys
+import time
 import traceback
 
 import config
@@ -50,12 +52,32 @@ def run_once(scenario, use_trace=True):
     if use_trace:
         trace_module.start_trace()
 
-    record = {"error": None, "session": None, "trace": "", "crashed": None}
+    record = {"error": None, "session": None, "trace": "", "crashed": None,
+              "received": {}, "elapsed": None}
+
+    # Record what each model tool actually received, for the state criterion.
+    import agent
+    real_suggest, real_card = agent.suggest_outfit, agent.create_fit_card
+
+    def spy_suggest(item, wardrobe_):
+        record["received"]["suggest_item_id"] = (item or {}).get("id")
+        return real_suggest(item, wardrobe_)
+
+    def spy_card(outfit, item):
+        record["received"]["card_item_id"] = (item or {}).get("id")
+        record["received"]["card_outfit"] = outfit
+        return real_card(outfit, item)
+
+    agent.suggest_outfit, agent.create_fit_card = spy_suggest, spy_card
+    started = time.perf_counter()
     try:
         record["session"] = run_agent(scenario["query"], wardrobe)
     except Exception as exc:  # noqa: BLE001 — a crash is a result worth logging
         record["crashed"] = f"{type(exc).__name__}: {exc}"
         record["traceback"] = traceback.format_exc()
+    finally:
+        record["elapsed"] = time.perf_counter() - started
+        agent.suggest_outfit, agent.create_fit_card = real_suggest, real_card
 
     if use_trace:
         record["trace"] = trace_module.get_trace()
@@ -106,12 +128,17 @@ def main():
                     print(f"  try {attempt}: stopped early — {str(session['error'])[:60]}")
                 else:
                     card = (session.get("fit_card") or "")
-                    print(f"  try {attempt}: completed — fit card {len(card)} chars")
+                    print(f"  try {attempt}: completed — fit card {len(card)} chars, {record['elapsed']:.1f}s")
 
         rows.append({"scenario": scenario, "tries": tries})
         print()
 
     write_report(rows, args)
+    dump = [{"scenario": row["scenario"], "tries": [
+        {k: v for k, v in t.items() if k != "trace"} for t in row["tries"]]}
+        for row in rows]
+    out = config.RESULTS_DIR / f"records{'_' + args.label if args.label else ''}.json"
+    out.write_text(json.dumps(dump, indent=2, default=str), encoding="utf-8")
 
 
 def write_report(rows, args):
