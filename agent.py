@@ -118,9 +118,12 @@ def run_agent(query: str, wardrobe: dict) -> dict:
 
         if next_step == "search":
             parsed = session["parsed"]
-            session["search_results"] = search_listings(
-                parsed["description"], parsed["size"], parsed["max_price"]
-            )
+            from mcp_client import call_tool
+            results = call_tool("search_listings", {
+                    "description": description,
+                    "size": size,
+                    "max_price": max_price,
+                })
             # The branch: nothing found means stop here, before any model call.
             if not session["search_results"]:
                 session["error"] = _no_results_message(session["parsed"])
